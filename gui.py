@@ -1,106 +1,100 @@
-#!/usr/bin/env python3
 import tkinter as tk
-from tkinter import ttk, scrolledtext
+from tkinter import ttk, scrolledtext, messagebox
 import socket
-import time
 import threading
 
-# Server connection settings (ensure these match your server configuration)
+# Server address
 HOST = socket.gethostbyname(socket.gethostname())
 PORT = 9876
 ADDR = (HOST, PORT)
 
-def send_request(user_input, retries=3, delay=2):
-    """Send a request to the server and return the response."""
-    attempt = 0
-    response = ""
-    while attempt < retries:
-        try:
-            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client_socket.connect(ADDR)
-            break
-        except socket.error:
-            attempt += 1
-            time.sleep(delay)
-    else:
-        return "Failed to connect to the server after several attempts."
-    
-    # Format the request string (e.g., "user=Alice command=deposit acct_num=1001 amount=500")
-    request_str = " ".join(f"{key}={value}" for key, value in user_input.items())
-    client_socket.send(request_str.encode())
-    
-    # Receive the response until we see the "END" marker
-    while True:
-        chunk = client_socket.recv(1024).decode()
-        if "END" in chunk:
-            response += chunk.replace("END", "")
-            break
-        response += chunk
-    client_socket.close()
-    return response
+class BankClientGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("ABC Bank Client UI")
+        self.root.geometry("600x500")
 
-def send_command():
-    """Collect user inputs, send the request in a separate thread, and display the response."""
-    user = entry_user.get().strip()
-    command = entry_command.get().strip()
-    acct_num = entry_acct.get().strip() or "0"
-    amount = entry_amount.get().strip() or "0"
-    
-    # Prepare the data dictionary to match the expected format
-    user_input = {
-        'user': user,
-        'command': command,
-        'acct_num': acct_num,
-        'amount': amount,
-    }
-    
-    # Use a thread to avoid freezing the GUI while waiting for the server response
-    def thread_function():
-        resp = send_request(user_input)
-        # Update the response text widget (in the main thread)
-        text_response.config(state=tk.NORMAL)
-        text_response.delete("1.0", tk.END)
-        text_response.insert(tk.END, resp)
-        text_response.config(state=tk.DISABLED)
-    
-    threading.Thread(target=thread_function, daemon=True).start()
+        self.setup_widgets()
 
-# Create the main Tkinter window
-root = tk.Tk()
-root.title("ABC Bank Client UI")
+    def setup_widgets(self):
+        frame = ttk.Frame(self.root, padding="10")
+        frame.pack(fill=tk.BOTH, expand=True)
 
-# Create a frame with padding
-frame = ttk.Frame(root, padding="10")
-frame.grid(row=0, column=0, sticky=(tk.N, tk.W, tk.E, tk.S))
+        # Username
+        ttk.Label(frame, text="Username:").grid(row=0, column=0, sticky=tk.W)
+        self.entry_user = ttk.Entry(frame, width=30)
+        self.entry_user.grid(row=0, column=1, sticky=tk.W)
 
-# Username field
-ttk.Label(frame, text="Username:").grid(row=0, column=0, sticky=tk.W)
-entry_user = ttk.Entry(frame, width=20)
-entry_user.grid(row=0, column=1, sticky=(tk.W, tk.E))
+        # Command Dropdown
+        ttk.Label(frame, text="Command:").grid(row=1, column=0, sticky=tk.W)
+        self.command_var = tk.StringVar()
+        commands = [
+            "create_account", "deposit", "withdraw", "transfer_to",
+            "pay_loan_check", "pay_loan_transfer_to", "show_bank",
+            "show_accountholders", "show_history", "show_history_filtered",
+            "apply_interest"
+        ]
+        self.combo_command = ttk.Combobox(frame, textvariable=self.command_var, values=commands, state="readonly")
+        self.combo_command.grid(row=1, column=1, sticky=tk.W)
+        self.combo_command.current(0)
 
-# Command field
-ttk.Label(frame, text="Command:").grid(row=1, column=0, sticky=tk.W)
-entry_command = ttk.Entry(frame, width=20)
-entry_command.grid(row=1, column=1, sticky=(tk.W, tk.E))
+        # Account Number
+        ttk.Label(frame, text="Account Number:").grid(row=2, column=0, sticky=tk.W)
+        self.entry_acct = ttk.Entry(frame, width=30)
+        self.entry_acct.grid(row=2, column=1, sticky=tk.W)
 
-# Account Number field
-ttk.Label(frame, text="Account Number:").grid(row=2, column=0, sticky=tk.W)
-entry_acct = ttk.Entry(frame, width=20)
-entry_acct.grid(row=2, column=1, sticky=(tk.W, tk.E))
+        # Amount or Filter
+        ttk.Label(frame, text="Amount / Operation Type:").grid(row=3, column=0, sticky=tk.W)
+        self.entry_amount = ttk.Entry(frame, width=30)
+        self.entry_amount.grid(row=3, column=1, sticky=tk.W)
 
-# Amount field
-ttk.Label(frame, text="Amount:").grid(row=3, column=0, sticky=tk.W)
-entry_amount = ttk.Entry(frame, width=20)
-entry_amount.grid(row=3, column=1, sticky=(tk.W, tk.E))
+        # Submit Button
+        self.btn_send = ttk.Button(frame, text="Send Request", command=self.send_command)
+        self.btn_send.grid(row=4, column=0, columnspan=2, pady=10)
 
-# Send Request button
-button_send = ttk.Button(frame, text="Send Request", command=send_command)
-button_send.grid(row=4, column=0, columnspan=2, pady=10)
+        # Response Box
+        ttk.Label(frame, text="Response:").grid(row=5, column=0, sticky=tk.W)
+        self.text_response = scrolledtext.ScrolledText(frame, width=70, height=15, state=tk.DISABLED)
+        self.text_response.grid(row=6, column=0, columnspan=2, pady=5)
 
-# Response display area
-ttk.Label(frame, text="Response:").grid(row=5, column=0, sticky=tk.W)
-text_response = scrolledtext.ScrolledText(frame, width=50, height=10, state=tk.DISABLED)
-text_response.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E))
+    def send_command(self):
+        user = self.entry_user.get().strip()
+        command = self.command_var.get().strip()
+        acct_num = self.entry_acct.get().strip() or "0"
+        amount = self.entry_amount.get().strip() or "0"
 
-# Start the Tkinter event loop
-root.mainloop()
+        # Special handling for show_history_filtered
+        if command == "show_history_filtered":
+            request_str = f"user={user} command={command} acct_num={acct_num} operation={amount}"
+        else:
+            request_str = f"user={user} command={command} acct_num={acct_num} amount={amount}"
+
+        def thread_func():
+            try:
+                client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client_socket.connect(ADDR)
+                client_socket.send(request_str.encode())
+                response = ""
+                while True:
+                    chunk = client_socket.recv(1024).decode()
+                    if "END" in chunk:
+                        response += chunk.replace("END", "")
+                        break
+                    response += chunk
+                client_socket.close()
+                self.display_response(response)
+            except Exception as e:
+                self.display_response(f"Error: {e}")
+
+        threading.Thread(target=thread_func, daemon=True).start()
+
+    def display_response(self, response):
+        self.text_response.config(state=tk.NORMAL)
+        self.text_response.delete("1.0", tk.END)
+        self.text_response.insert(tk.END, response)
+        self.text_response.config(state=tk.DISABLED)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = BankClientGUI(root)
+    root.mainloop()
